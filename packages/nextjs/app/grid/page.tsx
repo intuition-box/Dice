@@ -8,10 +8,10 @@ import { usePublicClient, useAccount } from "wagmi";
 import deployedContracts from "~~/contracts/deployedContracts";
 
 // Intuition Stress‑Grid — Version "Dice‑Only Minimal"
-// - Enlève l'en-tête et la config réseau/burner
-// - Garde seulement : Nombre de dés (transactions) & Parallélisme (burst)
-// - Boutons : Lancer / Réinitialiser / Auto (relance toutes les 5s)
-// - Animation des dés : chiffre 0–9 qui oscille; gagnants = 1..5
+// - Removes header and network/burner config
+// - Keeps only: Number of dice (transactions) & Parallelism (burst)
+// - Buttons: Launch / Reset / Auto (restart every 5s)
+// - Dice animation: digit 0–9 oscillating; winners = 1..5
 
 // ---------- Types ----------
 
@@ -49,8 +49,8 @@ function formatMs(ms?: number) {
 const ROLL_ETH_VALUE = "0.002";
 
 export default function App() {
-  const [count, setCount] = useState<number>(3); // nombre de dés (transactions)
-  const [burstSize, setBurstSize] = useState<number>(50); // parallélisme
+  const [count, setCount] = useState<number>(3); // number of dice (transactions)
+  const [burstSize, setBurstSize] = useState<number>(50); // parallelism
   const [tiles, setTiles] = useState<Tile[]>(() => Array.from({ length: 100 }, (_, i) => ({ id: i, status: { phase: "idle" } })));
   const [running, setRunning] = useState(false);
   const [auto, setAuto] = useState(false);
@@ -558,7 +558,7 @@ export default function App() {
         <section className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm">Nombre de dés (transactions)</label>
+              <label className="block text-sm">Number of dice (transactions)</label>
               <input
                 type="number"
                 min={1}
@@ -569,7 +569,7 @@ export default function App() {
               />
             </div>
             <div>
-              <label className="block text-sm">Parallélisme (burst)</label>
+              <label className="block text-sm">Parallelism (burst)</label>
               <input
                 type="number"
                 min={1}
@@ -580,7 +580,7 @@ export default function App() {
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 disabled:opacity-50"
               />
               <div className="text-xs text-neutral-500 mt-1">
-                {isSequential ? "Désactivé en mode séquentiel" : "Taille des groupes de transactions (50ms entre chaque)"}
+                {isSequential ? "Disabled in sequential mode" : "Transaction group size (50ms between each)"}
               </div>
             </div>
           </div>
@@ -590,7 +590,7 @@ export default function App() {
               onClick={() => setIsSequential(v => !v)}
               className={"px-4 py-2 rounded-xl border " + (isSequential ? "bg-blue-600 border-blue-500" : "bg-white/10 border-neutral-700 hover:bg-white/15")}
             >
-              {isSequential ? "Séquentiel" : "Batch"}
+              {isSequential ? "Sequential" : "Batch"}
             </button>
             <button
               onClick={() => setHideNotifications(v => !v)}
@@ -617,13 +617,13 @@ export default function App() {
               onClick={runAll}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700"
             >
-              Lancer
+              Launch
             </button>
             <button
               onClick={resetTiles}
               className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-neutral-700"
             >
-              Réinitialiser
+              Reset
             </button>
             <button
               onClick={() => setAuto(v => !v)}
@@ -636,17 +636,17 @@ export default function App() {
           <div className="text-sm text-neutral-400 space-y-1">
             <div>
             {running ? (
-                <span>Exécution en cours ({isSequential ? "séquentiel" : "batch"})… {minedCount}/{tiles.length} minées</span>
-            ) : auto ? (
-              <span>Auto activé : relance dans {nextRunIn ?? 5}s</span>
-            ) : (
-                <span>Prêt ({isSequential ? "mode séquentiel" : "mode batch"}){hideNotifications ? " - Notifications masquées" : ""}.</span>
+                                <span>Running ({isSequential ? "sequential" : "batch"})… {minedCount}/{tiles.length} mined</span>
+              ) : auto ? (
+                <span>Auto enabled: restarting in {nextRunIn ?? 5}s</span>
+              ) : (
+                <span>Ready ({isSequential ? "sequential mode" : "batch mode"}){hideNotifications ? " - Notifications hidden" : ""}.</span>
               )}
             </div>
             <div className="flex items-center gap-4">
-              <span>Prix actuel: {prize ? formatEther(prize) : "0"} ETH</span>
-              <span>Coût par lancer: {ROLL_ETH_VALUE} ETH</span>
-              <span>Gagnants: 0-5 (hex), Perdants: 6-F (hex)</span>
+              <span>Current prize: {prize ? formatEther(prize) : "0"} ETH</span>
+              <span>Cost per roll: {ROLL_ETH_VALUE} ETH</span>
+              <span>Winners: 0-5 (hex), Losers: 6-F (hex)</span>
             </div>
           </div>
         </section>
@@ -654,8 +654,8 @@ export default function App() {
         {/* Grid */}
         <section className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium">Dés en temps réel</h2>
-            <div className="text-sm text-neutral-400">{minedCount}/{tiles.length} minées</div>
+            <h2 className="font-medium">Real-time Dice</h2>
+            <div className="text-sm text-neutral-400">{minedCount}/{tiles.length} mined</div>
           </div>
 
           <div
@@ -669,9 +669,9 @@ export default function App() {
         </section>
 
         <footer className="text-xs text-neutral-500 pb-8">
-          Les numéros gagnants sont 0,1,2,3,4,5 (hex). Coût: 0.002 ETH par lancer. 
-          Mode séquentiel: 100ms entre transactions. Mode batch: 50ms entre soumissions, groupes de {burstSize}. 
-          En mode Auto, une nouvelle salve démarre 5s après la fin.
+          Winning numbers are 0,1,2,3,4,5 (hex). Cost: 0.002 ETH per roll. 
+          Sequential mode: 100ms between transactions. Batch mode: 50ms between submissions, groups of {burstSize}. 
+          In Auto mode, a new batch starts 5s after completion.
         </footer>
       </div>
     </div>
@@ -763,11 +763,11 @@ function TileCard({ tile }: { tile: Tile }) {
         <div className="text-xs space-y-1 min-w-0">
           {phase === "mined" && (
             <div className={isWaitingForRealResult ? "text-yellow-400" : win ? "text-emerald-400" : "text-rose-300"}>
-              {isWaitingForRealResult ? "Confirmé - En attente du résultat..." : win ? "Gagné" : "Perdu"}
+              {isWaitingForRealResult ? "Confirmed - Waiting for result..." : win ? "Won" : "Lost"}
             </div>
           )}
           {("latencyMs" in st) && (
-            <div className="text-neutral-400">Latence: {formatMs(st.latencyMs)}</div>
+            <div className="text-neutral-400">Latency: {formatMs(st.latencyMs)}</div>
           )}
           {phase === "failed" && "error" in st && (
             <div className="text-rose-300 line-clamp-2" title={st.error}>
