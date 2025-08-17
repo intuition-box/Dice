@@ -65,6 +65,7 @@ export default function App() {
   
   // Animation states for addictive effects
   const [animatedBalance, setAnimatedBalance] = useState(0n);
+  const [animatedWalletBalance, setAnimatedWalletBalance] = useState(0);
   const [flyingCoins, setFlyingCoins] = useState<Array<{id: string, fromTile: number, amount: bigint, isWin: boolean}>>([]);
   const [balanceAnimation, setBalanceAnimation] = useState<'idle' | 'gaining' | 'losing'>('idle');
   const [recentGain, setRecentGain] = useState<{amount: bigint, isWin: boolean} | null>(null);
@@ -102,6 +103,39 @@ export default function App() {
   const { data: walletBalance } = useWatchBalance({
     address: userAddress,
   });
+  
+  // Update animated wallet balance when actual balance changes
+  useEffect(() => {
+    if (walletBalance?.value) {
+      const targetBalance = Number(formatEther(walletBalance.value));
+      
+      // Animate from current to target
+      const startBalance = animatedWalletBalance;
+      const diff = targetBalance - startBalance;
+      const steps = 8;
+      const stepSize = diff / steps;
+      
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        currentStep++;
+        if (currentStep >= steps) {
+          setAnimatedWalletBalance(targetBalance);
+          clearInterval(interval);
+        } else {
+          setAnimatedWalletBalance(startBalance + stepSize * currentStep);
+        }
+      }, 25);
+      
+      return () => clearInterval(interval);
+    }
+  }, [walletBalance?.value]);
+  
+  // Initialize animated wallet balance
+  useEffect(() => {
+    if (walletBalance?.value && animatedWalletBalance === 0) {
+      setAnimatedWalletBalance(Number(formatEther(walletBalance.value)));
+    }
+  }, [walletBalance?.value, animatedWalletBalance]);
 
   // Recreate tiles when count changes
   useEffect(() => {
@@ -659,8 +693,10 @@ export default function App() {
         {/* Streak Celebration */}
         {showStreakCelebration && (
           <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-            <div className="text-6xl font-bold text-yellow-300 animate-bounce">
-              🔥 {winStreak} WIN STREAK! 🔥
+            <div className="text-6xl font-bold text-yellow-300 animate-bounce flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">I</div>
+              <span>{winStreak} Wins</span>
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">I</div>
             </div>
           </div>
         )}
@@ -719,7 +755,7 @@ export default function App() {
                 )}
               </div>
               
-              <div className="text-sm text-purple-200/70 font-medium">Balance (TTRUST)</div>
+              <div className="text-sm text-purple-200/70 font-medium">PNL (TTRUST)</div>
               
               {/* Multiplier hint for wins - Fixed height */}
               <div className="h-6 flex items-center justify-center">
@@ -750,7 +786,7 @@ export default function App() {
             {/* Wallet Balance */}
             <div className="text-center bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl p-4 border border-indigo-500/20">
               <div className="text-3xl font-bold mb-1 text-indigo-400">
-                {walletBalance ? Number(formatEther(walletBalance.value)).toFixed(4) : "0.0000"}
+                {animatedWalletBalance.toFixed(4)}
               </div>
               <div className="text-sm text-indigo-200/70 font-medium">Wallet Balance (TTRUST)</div>
             </div>
@@ -767,17 +803,17 @@ export default function App() {
                 <input
                   type="range"
                   min={1}
-                  max={50}
+                  max={33}
                   value={count}
                   onChange={(e) => setCount(Number(e.target.value))}
                   className="w-full h-2 bg-gradient-to-r from-purple-800/50 to-pink-800/50 rounded-lg appearance-none cursor-pointer"
                   style={{
-                    background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${(count * 2)}%, #374151 ${(count * 2)}%, #374151 100%)`
+                    background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${((count - 1) / 32) * 100}%, #374151 ${((count - 1) / 32) * 100}%, #374151 100%)`
                   }}
                 />
                 <div className="flex justify-between text-xs text-purple-300/50 mt-1">
                   <span>1</span>
-                  <span>50</span>
+                  <span>33</span>
                 </div>
               </div>
               
@@ -831,32 +867,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* Win Streak Display - Fixed height to prevent flickering */}
-        <section className={`text-center p-4 rounded-2xl transition-all duration-500 min-h-[80px] flex flex-col justify-center ${
-          winStreak > 0 
-            ? (winStreak >= 3 
-              ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 border border-yellow-400/70 animate-pulse opacity-100' 
-              : 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 opacity-100'
-            )
-            : 'bg-transparent border border-transparent opacity-0'
-        }`}>
-          {winStreak > 0 && (
-            <>
-              <div className="text-2xl font-bold">
-                <span className={winStreak >= 3 ? "text-yellow-300" : "text-emerald-400"}>
-                  {winStreak >= 3 ? '🔥' : '🎯'} {winStreak} {winStreak >= 3 ? 'WIN STREAK!' : 'wins in a row'}
-                </span>
-              </div>
-              {winStreak >= 5 && (
-                <div className="text-lg text-yellow-200 animate-bounce mt-1">
-                  🚀 UNSTOPPABLE! ON FIRE! 🚀
-                </div>
-              )}
-            </>
-          )}
-        </section>
 
-        
 
         {/* Grid */}
         <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-xl">
