@@ -94,11 +94,7 @@ export default function App() {
   const publicClient = usePublicClient();
   const { address: userAddress } = useAccount();
   
-  // Only read prize occasionally (no constant polling)
-  const { data: prize } = useScaffoldReadContract({ 
-    contractName: "DiceGame", 
-    functionName: "prize"
-  });
+  // Prize is now fixed 6x bet - no need to read from contract
   
   // Get user's actual wallet balance (same as navbar)
   const { data: walletBalance } = useWatchBalance({
@@ -362,8 +358,8 @@ export default function App() {
           });
           
           const rollDecimal = Number((decoded.args as any).roll);
-          const rollHex = rollDecimal.toString(16).toUpperCase();
-          const win = rollDecimal <= 5;
+          const rollHex = rollDecimal.toString(); // Just show the number 1-6
+          const win = rollDecimal === 3; // Only 3 wins
           
                 const blockchainLatencyMs = nowMs() - blockchainStartTime;
           console.log("🎲 Extracted roll from receipt:", rollHex, "win:", win, "blockchain latency:", blockchainLatencyMs + "ms");
@@ -373,7 +369,7 @@ export default function App() {
           setTotalBets(prev => prev + parseEther(ROLL_ETH_VALUE));
           
           if (win) {
-            const winAmount = parseEther("0.004"); // 2x the bet
+            const winAmount = parseEther("0.012"); // 6x the bet (0.002 * 6)
             const netGain = winAmount - parseEther(ROLL_ETH_VALUE);
             
             setTotalWinnings(prev => prev + winAmount);
@@ -645,7 +641,7 @@ export default function App() {
     console.log("🔴 Running state after completion:", false);
   }
 
-  // Auto mode: rerun every 2s after a run completes
+  // Auto mode: rerun every 1s after a run completes
   useEffect(() => {
     if (!auto) {
       setNextRunIn(null);
@@ -653,7 +649,7 @@ export default function App() {
     }
     if (running) return; // wait finish
 
-    let seconds = 2;
+    let seconds = 1;
     setNextRunIn(seconds);
 
     const timer = setInterval(() => {
@@ -950,7 +946,7 @@ export default function App() {
             {running ? (
                   <span className="text-cyan-400">🎲 Rolling dice… {minedCount}/{count} completed</span>
             ) : auto ? (
-                  <span className="text-indigo-400 animate-pulse">⚡ Auto mode: next batch in {nextRunIn ?? 2}s</span>
+                  <span className="text-indigo-400 animate-pulse">⚡ Auto mode: next batch in {nextRunIn ?? 1}s</span>
                 ) : winStreak >= 5 ? (
                   <span className="text-yellow-300 animate-pulse">🚀 UNSTOPPABLE! You're on fire!</span>
                 ) : winStreak >= 3 ? (
@@ -964,7 +960,7 @@ export default function App() {
               
               <div className="text-xs text-purple-200/60 flex items-center gap-4">
                 <span>💰 Cost: {ROLL_ETH_VALUE} TTRUST per roll</span>
-                <span>🏆 Prize: {prize ? formatEther(prize) : "0"} TTRUST</span>
+                <span>🏆 Win 3: Get 0.012 TTRUST (6x your bet!)</span>
               </div>
             </div>
           </div>
@@ -986,8 +982,8 @@ export default function App() {
 
         <footer className="text-center text-sm text-purple-300/50 pb-8 pt-4">
           <div className="max-w-2xl mx-auto space-y-2">
-            <p>🎯 Winning numbers: 0-5 (hex) • 💰 Cost: 0.002 TTRUST per roll</p>
-            <p>⚡ Batch mode with 50ms intervals • 🔄 Auto mode restarts every 2s</p>
+            <p>🎯 Winning number: 3 only • 💰 Cost: 0.002 TTRUST per roll • 🏆 Win: 6x payout</p>
+            <p>⚡ Batch mode with 50ms intervals • 🔄 Auto mode restarts every 1s</p>
             <p className="text-xs text-purple-400/40">Powered by Intuition Protocol • Provably Fair On-Chain</p>
           </div>
         </footer>

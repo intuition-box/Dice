@@ -5,7 +5,6 @@ import "hardhat/console.sol";
 
 contract DiceGame {
     uint256 public nonce = 0;
-    uint256 public prize = 0;
 
     error NotEnoughEther();
 
@@ -13,11 +12,7 @@ contract DiceGame {
     event Winner(address winner, uint256 amount);
 
     constructor() payable {
-        resetPrize();
-    }
-
-    function resetPrize() private {
-        prize = ((address(this).balance * 10) / 100);
+        // No prize initialization needed - fixed 6x payout
     }
 
     function rollTheDice() public payable {
@@ -27,25 +22,24 @@ contract DiceGame {
 
         bytes32 prevHash = blockhash(block.number - 1);
         bytes32 hash = keccak256(abi.encodePacked(prevHash, address(this), nonce));
-        uint256 roll = uint256(hash) % 16;
+        uint256 roll = (uint256(hash) % 6) + 1; // Roll between 1-6
 
         console.log("\t", "   Dice Game Roll:", roll);
 
         nonce++;
-        prize += ((msg.value * 40) / 100);
 
         emit Roll(msg.sender, msg.value, roll);
 
-        if (roll > 5) {
-            return;
+        // Only 3 is a winning number
+        if (roll == 3) {
+            // Winner gets 6x their bet
+            uint256 amount = msg.value * 6;
+            (bool sent, ) = msg.sender.call{ value: amount }("");
+            require(sent, "Failed to send Ether");
+
+            emit Winner(msg.sender, amount);
         }
-
-        uint256 amount = prize;
-        (bool sent, ) = msg.sender.call{ value: amount }("");
-        require(sent, "Failed to send Ether");
-
-        resetPrize();
-        emit Winner(msg.sender, amount);
+        // All other numbers (1, 2, 4, 5, 6) are losses - no payout
     }
 
     receive() external payable {}

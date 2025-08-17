@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   13579: {
     DiceGame: {
-      address: "0x19dF24f68c93F635EA66651E7b7E9C3a21bb6D46",
+      address: "0x2baEa7119627c2c02EFcA3551b81c218B468C768",
       abi: [
         {
           inputs: [],
@@ -78,19 +78,6 @@ const deployedContracts = {
         },
         {
           inputs: [],
-          name: "prize",
-          outputs: [
-            {
-              internalType: "uint256",
-              name: "",
-              type: "uint256",
-            },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [],
           name: "rollTheDice",
           outputs: [],
           stateMutability: "payable",
@@ -102,7 +89,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 113538,
+      deployedOnBlock: 305194,
     },
   },
   31337: {

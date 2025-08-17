@@ -9,7 +9,7 @@ const deployDiceGame: DeployFunction = async function (hre: HardhatRuntimeEnviro
 
   await deploy("DiceGame", {
     from: deployer,
-    value: String(ethers.parseEther("0.05")),
+    value: String(ethers.parseEther("0.01")), // Reduced funding since we use fixed 6x payout
     log: true,
   });
 
