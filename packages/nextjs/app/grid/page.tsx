@@ -7,6 +7,7 @@ import { useWatchBalance } from "~~/hooks/scaffold-eth/useWatchBalance";
 import { toast } from "react-hot-toast";
 import { usePublicClient, useAccount } from "wagmi";
 import deployedContracts from "~~/contracts/deployedContracts";
+import NeonDiceD6 from "~~/components/NeonDiceD6";
 
 // Intuition Stress‑Grid — Version "Dice‑Only Minimal"
 // - Removes header and network/burner config
@@ -196,7 +197,7 @@ export default function App() {
   useEffect(() => {
     if (animatedBalance !== balance) {
       const diff = balance - animatedBalance;
-      const steps = 8; // Reduced from 20 to 8
+      const steps = 3; // Much faster - only 3 steps
       const stepSize = diff / BigInt(steps);
       
       let currentStep = 0;
@@ -208,7 +209,7 @@ export default function App() {
         } else {
           setAnimatedBalance(prev => prev + stepSize);
         }
-      }, 25); // Reduced from 50ms to 25ms
+      }, 8); // Much faster - 8ms instead of 25ms
       
       return () => clearInterval(interval);
     }
@@ -500,17 +501,17 @@ export default function App() {
     if (activeTiles.length === 0) {
       console.log("🔴 No idle tiles found");
       
-      // Check if all tiles are mined - if so, auto-reset them
+      // Check if all tiles are mined - if so, silently reset them without triggering background animation
       const allMined = tiles.every(t => t.status.phase === "mined");
       if (allMined && tiles.length > 0) {
-        console.log("🔄 All tiles are mined, auto-resetting to idle for new batch");
-        setTiles((prev) => prev.map((t) => ({ ...t, status: { phase: "idle" } })));
+        console.log("🔄 All tiles are mined, silently resetting for new batch");
         
-        // Now get the reset tiles for processing
-        const resetTiles = Array.from({ length: Math.min(count, tiles.length) }, (_, i) => ({ id: i }));
-        const queue = resetTiles.map(t => t.id);
-        console.log(`🚀 Processing ${queue.length} reset tiles (max: ${count})`);
+        // Silent reset: directly process new batch with existing tile IDs
+        // This avoids the setTiles call that triggers background re-render
+        const queue = Array.from({ length: Math.min(count, tiles.length) }, (_, i) => i);
+        console.log(`🚀 Processing ${queue.length} tiles (reusing IDs to avoid reset flash)`);
         
+        // Reset tiles individually as we process them to avoid bulk state change
         // Continue with batch processing logic...
         {
           // Batch mode - get current nonce and manage it explicitly for each transaction
@@ -541,7 +542,10 @@ export default function App() {
               const id = queue[i];
               const explicitNonce = currentNonce + i;
               
-              console.log(`📤 Starting transaction ${i + 1}/${queue.length} for tile ${id} with nonce ${explicitNonce}`);
+              console.log(`📤 Starting transaction ${i + 1}/${queue.length} for tile ${id} with nonce ${explicitNonce} (silent reset)`);
+              
+              // Reset this specific tile to idle individually (avoids bulk re-render)
+              updateTile(id, { phase: "idle" });
               
               // Start the transaction and collect promise
               const promise = runOne(id, explicitNonce).catch(error => {
@@ -672,16 +676,111 @@ export default function App() {
     console.log("✅ Reset complete");
   }
 
+  // Background animation always stays slow and consistent
+  const hasActiveTx = false; // Always false to keep slow animation
+
+  // Memoize particle properties to prevent jumping on re-renders
+  const particleData = useMemo(() => {
+    const purpleParticles = Array.from({ length: 32 }, (_, i) => ({
+      id: `purple-${i}`,
+      delay: Math.random() * 12,
+      top: Math.random() * 100,
+      left: Math.random() * 100,
+      moveY: (Math.random() * 60 + 30) * (Math.random() > 0.5 ? 1 : -1),
+      moveX: (Math.random() * 40 + 20) * (Math.random() > 0.5 ? 1 : -1),
+      idleDuration: Math.random() * 8 + 15,
+      activeDuration: Math.random() * 2 + 1.5,
+    }));
+
+    const pinkParticles = Array.from({ length: 24 }, (_, i) => ({
+      id: `pink-${i}`,
+      delay: Math.random() * 12,
+      top: Math.random() * 100,
+      left: Math.random() * 100,
+      moveY: (Math.random() * 40 + 20) * (Math.random() > 0.5 ? 1 : -1),
+      moveX: (Math.random() * 30 + 15) * (Math.random() > 0.5 ? 1 : -1),
+      idleDuration: Math.random() * 10 + 18,
+      activeDuration: Math.random() * 2 + 1.5,
+    }));
+
+    return { purpleParticles, pinkParticles };
+  }, []); // Empty dependency array - calculate only once
+
   // ---------- UI ----------
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
-                           radial-gradient(circle at 75% 75%, rgba(236, 72, 153, 0.1) 0%, transparent 50%)`
-        }}></div>
+    <div className="min-h-screen w-full bg-black text-white relative overflow-hidden">
+      {/* Floating Neon Particles Background */}
+      <div className="absolute inset-0">
+        {/* Ambient gradient overlay */}
+        <div
+          className="absolute inset-0 opacity-60"
+          style={{
+            background:
+              "radial-gradient(1200px 600px at 50% -10%, rgba(139, 92, 246, 0.15), transparent), radial-gradient(800px 400px at 60% 110%, rgba(236, 72, 153, 0.12), transparent)",
+          }}
+        />
+        
+        {/* Floating particles */}
+        <div 
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+          style={{
+            '--active-speed': hasActiveTx ? '1' : '0',
+            '--idle-opacity': hasActiveTx ? '0.8' : '0.15',
+            '--active-glow': hasActiveTx ? '8px' : '2px',
+            '--active-scale': hasActiveTx ? '1.25' : '0.75',
+          } as React.CSSProperties}
+        >
+          {particleData.purpleParticles.map((particle) => {
+            return (
+              <div
+                key={particle.id}
+                className="absolute w-1.5 h-1.5 rounded-full bg-white particle-large"
+                style={{
+                  top: `${particle.top}%`,
+                  left: `${particle.left}%`,
+                  '--move-x': `${particle.moveX}px`,
+                  '--move-y': `${particle.moveY}px`,
+                  '--base-duration': `${particle.idleDuration}s`,
+                  '--fast-duration': `${particle.activeDuration}s`,
+                  '--delay': `${particle.delay}s`,
+                } as React.CSSProperties}
+              />
+            );
+          })}
+          
+          {particleData.pinkParticles.map((particle) => {
+            return (
+              <div
+                key={particle.id}
+                className="absolute w-1 h-1 rounded-full bg-white particle-small"
+                style={{
+                  top: `${particle.top}%`,
+                  left: `${particle.left}%`,
+                  '--move-x': `${particle.moveX}px`,
+                  '--move-y': `${particle.moveY}px`,
+                  '--base-duration': `${particle.idleDuration}s`,
+                  '--fast-duration': `${particle.activeDuration}s`,
+                  '--delay': `${particle.delay}s`,
+                } as React.CSSProperties}
+              />
+            );
+          })}
+          
+          {/* Ambient rotating ring - reactive to transactions */}
+          <div
+            className={`absolute -inset-24 rounded-full transition-all duration-1500 ${
+              hasActiveTx ? 'opacity-60 scale-110' : 'opacity-10 scale-95'
+            }`}
+            style={{
+              background: hasActiveTx
+                ? "radial-gradient(50% 50% at 50% 50%, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 40%, transparent 60%)"
+                : "radial-gradient(50% 50% at 50% 50%, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 40%, transparent 60%)",
+              filter: "blur(12px)",
+              animation: hasActiveTx ? "rotate 15s linear infinite" : "rotate 120s linear infinite", // Much slower when idle
+            }}
+          />
+        </div>
       </div>
       
       <div className="relative max-w-6xl mx-auto p-4 space-y-4">
@@ -691,7 +790,7 @@ export default function App() {
         ))}
         
         {/* Streak Celebration */}
-        {showStreakCelebration && (
+        {/* {showStreakCelebration && (
           <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
             <div className="text-6xl font-bold text-yellow-300 animate-bounce flex items-center gap-4">
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">I</div>
@@ -699,23 +798,29 @@ export default function App() {
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">I</div>
             </div>
           </div>
-        )}
-        {/* Header */}
-        <div className="text-center mb-4">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 bg-clip-text text-transparent mb-2">
-            Intuition Dice
-          </h1>
-          <p className="text-sm text-purple-200/80 font-light">
-            Provably fair on-chain dice rolls with instant rewards
-          </p>
+        )} */}
+        {/* Header with Branding Dice */}
+        <div className="text-center mb-6">
+          <div className="flex items-center justify-center gap-8">
+            <NeonDiceD6 
+              size={120} 
+              winFace={3} 
+              showControls={false} 
+              idleSpin={true}
+              className="flex-shrink-0"
+            />
+            <NeonDiceD6 
+              size={120} 
+              winFace={3} 
+              showControls={false} 
+              idleSpin={true}
+              className="flex-shrink-0"
+            />
+          </div>
         </div>
 
         {/* Dashboard */}
-        <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-2xl">
-          <h2 className="text-xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Dashboard
-          </h2>
-          
+        <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-2xl">          
           <div className="grid grid-cols-4 gap-4 h-32">
             {/* Balance - Super Addictive Version */}
             <div className={`text-center rounded-2xl p-4 border transition-all duration-300 relative overflow-hidden h-full flex flex-col justify-center ${
@@ -739,7 +844,7 @@ export default function App() {
                 balanceAnimation === 'gaining' ? 'animate-bounce' : ''
               }`}>
                 <span className={animatedBalance >= 0n ? "text-emerald-400" : "text-rose-400"}>
-                  {animatedBalance >= 0n ? "+" : ""}{formatEther(animatedBalance)}
+                  {animatedBalance >= 0n ? "+" : ""}{Number(formatEther(animatedBalance)).toFixed(3)}
                 </span>
               </div>
               
@@ -791,7 +896,7 @@ export default function App() {
               <div className="text-sm text-indigo-200/70 font-medium">Wallet Balance (TTRUST)</div>
             </div>
           </div>
-          
+
           {/* Controls integrated in dashboard */}
           <div className="mt-6 pt-6 border-t border-purple-500/20">
             <div className="flex items-center gap-6">
@@ -819,15 +924,15 @@ export default function App() {
               
               {/* Action Buttons */}
               <div className="flex gap-3">
-                <button
-                  disabled={running}
-                  onClick={runAll}
+            <button
+              disabled={running}
+              onClick={runAll}
                   className="px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed font-bold text-white shadow-lg transform transition-all duration-200 hover:scale-105 disabled:hover:scale-100"
                 >
                   🚀 Launch
-                </button>
-                <button
-                  onClick={() => setAuto(v => !v)}
+            </button>
+            <button
+              onClick={() => setAuto(v => !v)}
                   className={`px-4 py-2 rounded-xl border font-medium transition-all duration-200 hover:scale-105 ${
                     auto 
                       ? "bg-gradient-to-r from-indigo-500 to-purple-500 border-indigo-400" 
@@ -835,16 +940,16 @@ export default function App() {
                   }`}
                 >
                   ⚡ Auto {auto && (nextRunIn != null ? `(${nextRunIn}s)` : "")}
-                </button>
+            </button>
               </div>
-            </div>
-            
+          </div>
+
             {/* Status and Info */}
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-purple-100/90 font-medium">
-                {running ? (
+            {running ? (
                   <span className="text-cyan-400">🎲 Rolling dice… {minedCount}/{count} completed</span>
-                ) : auto ? (
+            ) : auto ? (
                   <span className="text-indigo-400 animate-pulse">⚡ Auto mode: next batch in {nextRunIn ?? 2}s</span>
                 ) : winStreak >= 5 ? (
                   <span className="text-yellow-300 animate-pulse">🚀 UNSTOPPABLE! You're on fire!</span>
@@ -852,8 +957,6 @@ export default function App() {
                   <span className="text-emerald-400">🔥 HOT STREAK! Keep it going!</span>
                 ) : totalPlays > 0 && animatedBalance > 0n ? (
                   <span className="text-emerald-400">💰 Winning! Roll again for bigger gains!</span>
-                ) : totalPlays > 0 && animatedBalance < 0n ? (
-                  <span className="text-amber-400">💪 Your big win is coming - keep rolling!</span>
                 ) : (
                   <span>✨ Ready to win big with {count} dice</span>
                 )}
@@ -871,15 +974,6 @@ export default function App() {
 
         {/* Grid */}
         <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-xl">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              🎲 Live Dice Rolls
-            </h2>
-            <div className="text-lg text-purple-200/80 font-medium">
-              {minedCount}/{count} completed
-            </div>
-          </div>
-
           <div
             className="grid gap-2"
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(85px, 1fr))" }}

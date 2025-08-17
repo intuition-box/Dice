@@ -239,3 +239,50 @@ input[type="range"]::-moz-range-thumb:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 12px rgba(139, 92, 246, 0.6);
 }
+
+/* Floating Particles Animations */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dynamic particle animations will be generated via inline styles */
+@keyframes float-base {
+  0%, 100% {
+    transform: translate(0, 0) scale(0.8);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate(var(--move-x, 0), var(--move-y, 0)) scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Neon Colors for Dice Component */
+:root {
+  --neon-green: #00ffcc;
+  --neon-red: #ff3b5c;
+}
+
+/* Particle animations using CSS variables to avoid re-renders */
+.particle-large {
+  opacity: var(--idle-opacity, 0.15);
+  transform: scale(var(--active-scale, 0.75));
+  filter: drop-shadow(0 0 var(--active-glow, 2px) rgba(255,255,255,0.3));
+  animation: float-base calc(var(--base-duration, 15s) - var(--active-speed, 0) * (var(--base-duration, 15s) - var(--fast-duration, 2s))) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  transition: opacity 1.5s ease, transform 1.5s ease, filter 1.5s ease;
+}
+
+.particle-small {
+  opacity: calc(var(--idle-opacity, 0.15) * 0.7);
+  transform: scale(calc(var(--active-scale, 0.75) * 1.2));
+  filter: drop-shadow(0 0 calc(var(--active-glow, 2px) * 0.75) rgba(255,255,255,0.2));
+  animation: float-base calc(var(--base-duration, 18s) - var(--active-speed, 0) * (var(--base-duration, 18s) - var(--fast-duration, 2s))) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  transition: opacity 1.5s ease, transform 1.5s ease, filter 1.5s ease;
+}
