@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { parseEther, formatEther, decodeEventLog } from "viem";
 import { useScaffoldWriteContract, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useWatchBalance } from "~~/hooks/scaffold-eth/useWatchBalance";
 import { toast } from "react-hot-toast";
 import { usePublicClient, useAccount } from "wagmi";
 import deployedContracts from "~~/contracts/deployedContracts";
@@ -49,14 +50,27 @@ function formatMs(ms?: number) {
 const ROLL_ETH_VALUE = "0.002";
 
 export default function App() {
-  const [count, setCount] = useState<number>(3); // number of dice (transactions)
-  const [burstSize, setBurstSize] = useState<number>(50); // parallelism
+  const [count, setCount] = useState<number>(10); // number of dice (transactions)
   const [tiles, setTiles] = useState<Tile[]>(() => Array.from({ length: 100 }, (_, i) => ({ id: i, status: { phase: "idle" } })));
   const [running, setRunning] = useState(false);
   const [auto, setAuto] = useState(false);
   const [nextRunIn, setNextRunIn] = useState<number | null>(null);
-  const [isSequential, setIsSequential] = useState(false);
-  const [hideNotifications, setHideNotifications] = useState(false);
+  const [hideNotifications, setHideNotifications] = useState(true); // off by default
+  
+  // Dashboard metrics
+  const [totalPlays, setTotalPlays] = useState(0);
+  const [totalBets, setTotalBets] = useState(0n);
+  const [totalWinnings, setTotalWinnings] = useState(0n);
+  const [balance, setBalance] = useState(0n);
+  
+  // Animation states for addictive effects
+  const [animatedBalance, setAnimatedBalance] = useState(0n);
+  const [flyingCoins, setFlyingCoins] = useState<Array<{id: string, fromTile: number, amount: bigint, isWin: boolean}>>([]);
+  const [balanceAnimation, setBalanceAnimation] = useState<'idle' | 'gaining' | 'losing'>('idle');
+  const [recentGain, setRecentGain] = useState<{amount: bigint, isWin: boolean} | null>(null);
+  const [winStreak, setWinStreak] = useState(0);
+  const [totalWins, setTotalWins] = useState(0);
+  const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   
   // Cache gas estimation to avoid repeated RPC calls
   const [cachedGasEstimate, setCachedGasEstimate] = useState<{
@@ -82,6 +96,11 @@ export default function App() {
   const { data: prize } = useScaffoldReadContract({ 
     contractName: "DiceGame", 
     functionName: "prize"
+  });
+  
+  // Get user's actual wallet balance (same as navbar)
+  const { data: walletBalance } = useWatchBalance({
+    address: userAddress,
   });
 
   // Recreate tiles when count changes
@@ -138,6 +157,47 @@ export default function App() {
   }, [userAddress]);
 
   const minedCount = useMemo(() => tiles.filter(t => t.status.phase === "mined").length, [tiles]);
+
+  // Animated balance counting effect - MUCH faster
+  useEffect(() => {
+    if (animatedBalance !== balance) {
+      const diff = balance - animatedBalance;
+      const steps = 8; // Reduced from 20 to 8
+      const stepSize = diff / BigInt(steps);
+      
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        currentStep++;
+        if (currentStep >= steps) {
+          setAnimatedBalance(balance);
+          clearInterval(interval);
+        } else {
+          setAnimatedBalance(prev => prev + stepSize);
+        }
+      }, 25); // Reduced from 50ms to 25ms
+      
+      return () => clearInterval(interval);
+    }
+  }, [balance, animatedBalance]);
+
+  // Clear recent gain after animation
+  useEffect(() => {
+    if (recentGain) {
+      const timer = setTimeout(() => setRecentGain(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [recentGain]);
+
+  // Trigger flying coin animation
+  const triggerFlyingCoin = (tileId: number, amount: bigint, isWin: boolean) => {
+    const coinId = `coin-${Date.now()}-${tileId}`;
+    setFlyingCoins(prev => [...prev, { id: coinId, fromTile: tileId, amount, isWin }]);
+    
+    // Remove flying coin after animation
+    setTimeout(() => {
+      setFlyingCoins(prev => prev.filter(coin => coin.id !== coinId));
+    }, 1500);
+  };
 
   function updateTile(id: number, status: TileStatus) {
     setTiles((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
@@ -273,6 +333,49 @@ export default function App() {
                 const blockchainLatencyMs = nowMs() - blockchainStartTime;
           console.log("🎲 Extracted roll from receipt:", rollHex, "win:", win, "blockchain latency:", blockchainLatencyMs + "ms");
           
+          // Update dashboard metrics with addictive animations
+          setTotalPlays(prev => prev + 1);
+          setTotalBets(prev => prev + parseEther(ROLL_ETH_VALUE));
+          
+          if (win) {
+            const winAmount = parseEther("0.004"); // 2x the bet
+            const netGain = winAmount - parseEther(ROLL_ETH_VALUE);
+            
+            setTotalWinnings(prev => prev + winAmount);
+            setTotalWins(prev => prev + 1);
+            setBalance(prev => prev + netGain);
+            
+            // Update win streak
+            setWinStreak(prev => {
+              const newStreak = prev + 1;
+              if (newStreak >= 3) {
+                setShowStreakCelebration(true);
+                setTimeout(() => setShowStreakCelebration(false), 3000);
+              }
+              return newStreak;
+            });
+            
+            // Trigger addictive win animations
+            triggerFlyingCoin(id, netGain, true);
+            setBalanceAnimation('gaining');
+            setRecentGain({ amount: netGain, isWin: true });
+            
+            setTimeout(() => setBalanceAnimation('idle'), 1000);
+          } else {
+            const loss = parseEther(ROLL_ETH_VALUE);
+            setBalance(prev => prev - loss);
+            
+            // Reset win streak on loss
+            setWinStreak(0);
+            
+            // Trigger loss animation (less dramatic)
+            triggerFlyingCoin(id, loss, false);
+            setBalanceAnimation('losing');
+            setRecentGain({ amount: loss, isWin: false });
+            
+            setTimeout(() => setBalanceAnimation('idle'), 800);
+          }
+          
           updateTile(id, { 
             phase: "mined", 
             latencyMs: blockchainLatencyMs, 
@@ -356,8 +459,8 @@ export default function App() {
     setRunning(true);
     console.log("🔴 Set running to true");
 
-    // Only process idle tiles up to burstSize
-    const activeTiles = tiles.filter(t => t.status.phase === "idle").slice(0, burstSize);
+    // Only process idle tiles up to count
+    const activeTiles = tiles.filter(t => t.status.phase === "idle").slice(0, count);
     console.log("🔴 Found", activeTiles.length, "idle tiles out of", tiles.length, "total");
     
     if (activeTiles.length === 0) {
@@ -370,19 +473,12 @@ export default function App() {
         setTiles((prev) => prev.map((t) => ({ ...t, status: { phase: "idle" } })));
         
         // Now get the reset tiles for processing
-        const resetTiles = Array.from({ length: Math.min(burstSize, tiles.length) }, (_, i) => ({ id: i }));
+        const resetTiles = Array.from({ length: Math.min(count, tiles.length) }, (_, i) => ({ id: i }));
         const queue = resetTiles.map(t => t.id);
-        console.log(`🚀 Processing ${queue.length} reset tiles (max: ${burstSize})`);
+        console.log(`🚀 Processing ${queue.length} reset tiles (max: ${count})`);
         
-        // Continue with the processing logic...
-        if (isSequential) {
-          // Sequential mode - one transaction at a time
-          console.log("🔄 Running in sequential mode");
-          for (const id of queue) {
-            await runOne(id);
-            await delay(100); // Small delay between sequential transactions
-          }
-        } else {
+        // Continue with batch processing logic...
+        {
           // Batch mode - get current nonce and manage it explicitly for each transaction
           console.log("🚀 Running in batch mode with explicit nonce management");
           
@@ -449,16 +545,9 @@ export default function App() {
     }
     
     const queue = activeTiles.map(t => t.id);
-    console.log(`🚀 Processing ${queue.length} tiles (max: ${burstSize}) - gas status: ${gasEstimationStatus}`);
+    console.log(`🚀 Processing ${queue.length} tiles (max: ${count}) - gas status: ${gasEstimationStatus}`);
     
-    if (isSequential) {
-      // Sequential mode - one transaction at a time
-      console.log("🔄 Running in sequential mode");
-      for (const id of queue) {
-        await runOne(id);
-        await delay(100); // Small delay between sequential transactions
-      }
-    } else {
+    {
       // Batch mode - get current nonce and manage it explicitly for each transaction
       console.log("🚀 Running in batch mode with explicit nonce management");
       
@@ -518,7 +607,7 @@ export default function App() {
     console.log("🔴 Running state after completion:", false);
   }
 
-  // Auto mode: rerun every 5s after a run completes
+  // Auto mode: rerun every 2s after a run completes
   useEffect(() => {
     if (!auto) {
       setNextRunIn(null);
@@ -526,7 +615,7 @@ export default function App() {
     }
     if (running) return; // wait finish
 
-    let seconds = 5;
+    let seconds = 2;
     setNextRunIn(seconds);
 
     const timer = setInterval(() => {
@@ -552,127 +641,282 @@ export default function App() {
   // ---------- UI ----------
 
   return (
-    <div className="min-h-screen w-full bg-neutral-950 text-neutral-100">
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Controls (minimal) */}
-        <section className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm">Number of dice (transactions)</label>
-              <input
-                type="number"
-                min={1}
-                max={2000}
-                value={count}
-                onChange={(e) => setCount(Math.max(1, Math.min(2000, Number(e.target.value) || 1)))}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2"
-              />
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                           radial-gradient(circle at 75% 75%, rgba(236, 72, 153, 0.1) 0%, transparent 50%)`
+        }}></div>
+      </div>
+      
+      <div className="relative max-w-6xl mx-auto p-4 space-y-4">
+        {/* Flying Coins Animation */}
+        {flyingCoins.map((coin) => (
+          <FlyingCoin key={coin.id} coin={coin} />
+        ))}
+        
+        {/* Streak Celebration */}
+        {showStreakCelebration && (
+          <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+            <div className="text-6xl font-bold text-yellow-300 animate-bounce">
+              🔥 {winStreak} WIN STREAK! 🔥
             </div>
-            <div>
-              <label className="block text-sm">Parallelism (burst)</label>
-              <input
-                type="number"
-                min={1}
-                max={400}
-                value={burstSize}
-                onChange={(e) => setBurstSize(Math.max(1, Math.min(400, Number(e.target.value) || 1)))}
-                disabled={isSequential}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 disabled:opacity-50"
-              />
-              <div className="text-xs text-neutral-500 mt-1">
-                {isSequential ? "Disabled in sequential mode" : "Transaction group size (50ms between each)"}
+          </div>
+        )}
+        {/* Header */}
+        <div className="text-center mb-4">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 bg-clip-text text-transparent mb-2">
+            Intuition Dice
+          </h1>
+          <p className="text-sm text-purple-200/80 font-light">
+            Provably fair on-chain dice rolls with instant rewards
+          </p>
+        </div>
+
+        {/* Dashboard */}
+        <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-2xl">
+          <h2 className="text-xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Dashboard
+          </h2>
+          
+          <div className="grid grid-cols-4 gap-4 h-32">
+            {/* Balance - Super Addictive Version */}
+            <div className={`text-center rounded-2xl p-4 border transition-all duration-300 relative overflow-hidden h-full flex flex-col justify-center ${
+              balanceAnimation === 'gaining' 
+                ? 'bg-gradient-to-br from-emerald-500/30 to-teal-500/30 border-emerald-400/70 shadow-lg shadow-emerald-500/40 scale-105' 
+                : balanceAnimation === 'losing'
+                ? 'bg-gradient-to-br from-rose-500/30 to-red-500/30 border-rose-400/70 shadow-lg shadow-rose-500/40'
+                : 'bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20'
+            }`}>
+              {/* Sparkle effect for wins */}
+              {balanceAnimation === 'gaining' && (
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute top-2 left-2 text-yellow-300 animate-ping">✨</div>
+                  <div className="absolute top-4 right-3 text-yellow-300 animate-ping" style={{animationDelay: '0.2s'}}>⭐</div>
+                  <div className="absolute bottom-3 left-4 text-yellow-300 animate-ping" style={{animationDelay: '0.4s'}}>💫</div>
+                  <div className="absolute bottom-2 right-2 text-yellow-300 animate-ping" style={{animationDelay: '0.6s'}}>✨</div>
+                </div>
+              )}
+              
+              <div className={`text-3xl font-bold mb-1 transition-all duration-300 ${
+                balanceAnimation === 'gaining' ? 'animate-bounce' : ''
+              }`}>
+                <span className={animatedBalance >= 0n ? "text-emerald-400" : "text-rose-400"}>
+                  {animatedBalance >= 0n ? "+" : ""}{formatEther(animatedBalance)}
+                </span>
+              </div>
+              
+              {/* Recent gain/loss indicator - Fixed height */}
+              <div className="h-8 flex items-center justify-center">
+                {recentGain && (
+                  <div className={`text-xl font-bold animate-bounce ${
+                    recentGain.isWin ? 'text-emerald-300' : 'text-rose-300'
+                  }`}>
+                    {recentGain.isWin ? '+' : '-'}{formatEther(recentGain.amount)} TTRUST
+                    {recentGain.isWin ? ' 🎉' : ' 💸'}
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-sm text-purple-200/70 font-medium">Balance (TTRUST)</div>
+              
+              {/* Multiplier hint for wins - Fixed height */}
+              <div className="h-6 flex items-center justify-center">
+                {balanceAnimation === 'gaining' && (
+                  <div className="text-xs text-emerald-300 animate-pulse">
+                    🚀 2x WIN! Keep rolling! 🚀
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 justify-end pt-1">
-            <button
-              onClick={() => setIsSequential(v => !v)}
-              className={"px-4 py-2 rounded-xl border " + (isSequential ? "bg-blue-600 border-blue-500" : "bg-white/10 border-neutral-700 hover:bg-white/15")}
-            >
-              {isSequential ? "Sequential" : "Batch"}
-            </button>
-            <button
-              onClick={() => setHideNotifications(v => !v)}
-              className={"px-4 py-2 rounded-xl border " + (hideNotifications ? "bg-red-600 border-red-500" : "bg-white/10 border-neutral-700 hover:bg-white/15")}
-            >
-              {hideNotifications ? "Notifications OFF" : "Notifications ON"}
-            </button>
-            <div className="px-4 py-2 rounded-xl bg-white/10 border border-neutral-700 flex items-center gap-2">
-              <span>Gas:</span>
-              {!userAddress && <span className="text-orange-500" title="Connect wallet to estimate gas">🔌</span>}
-              {userAddress && gasEstimationStatus === 'estimating' && <span className="animate-pulse text-yellow-500">🔄</span>}
-              {userAddress && gasEstimationStatus === 'ready' && <span className="text-green-500">✅</span>}
-              {userAddress && gasEstimationStatus === 'error' && <span className="text-red-500">❌</span>}
-              {userAddress && gasEstimationStatus === 'idle' && <span className="text-gray-500">⏸️</span>}
-              <span className="text-xs">
-                {cachedGasEstimate ? 
-                  `${Number(cachedGasEstimate.gas).toLocaleString()} (${formatEther(cachedGasEstimate.gasPrice * 1000000000n).slice(0,8)} gwei)` 
-                  : userAddress ? "—" : "Connect wallet"
-                }
-              </span>
+            
+            {/* Total Plays */}
+            <div className="text-center bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-2xl p-4 border border-blue-500/20">
+              <div className="text-3xl font-bold mb-1 text-cyan-400">
+                {totalPlays.toLocaleString()}
+              </div>
+              <div className="text-sm text-blue-200/70 font-medium">Total Plays</div>
             </div>
-            <button
-              disabled={running}
-              onClick={runAll}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700"
-            >
-              Launch
-            </button>
-            <button
-              onClick={resetTiles}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-neutral-700"
-            >
-              Reset
-            </button>
-            <button
-              onClick={() => setAuto(v => !v)}
-              className={"px-4 py-2 rounded-xl border " + (auto ? "bg-indigo-600 border-indigo-500" : "bg-white/10 border-neutral-700 hover:bg-white/15")}
-            >
-              Auto {auto && (nextRunIn != null ? `(${nextRunIn}s)` : "")}
-            </button>
-          </div>
-
-          <div className="text-sm text-neutral-400 space-y-1">
-            <div>
-            {running ? (
-                                <span>Running ({isSequential ? "sequential" : "batch"})… {minedCount}/{tiles.length} mined</span>
-              ) : auto ? (
-                <span>Auto enabled: restarting in {nextRunIn ?? 5}s</span>
-              ) : (
-                <span>Ready ({isSequential ? "sequential mode" : "batch mode"}){hideNotifications ? " - Notifications hidden" : ""}.</span>
-              )}
+            
+            {/* Total Bets */}
+            <div className="text-center bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-2xl p-4 border border-amber-500/20">
+              <div className="text-3xl font-bold mb-1 text-amber-400">
+                {formatEther(totalBets)}
+              </div>
+              <div className="text-sm text-amber-200/70 font-medium">Total Bets (TTRUST)</div>
             </div>
-            <div className="flex items-center gap-4">
-              <span>Current prize: {prize ? formatEther(prize) : "0"} ETH</span>
-              <span>Cost per roll: {ROLL_ETH_VALUE} ETH</span>
-              <span>Winners: 0-5 (hex), Losers: 6-F (hex)</span>
+            
+            {/* Wallet Balance */}
+            <div className="text-center bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl p-4 border border-indigo-500/20">
+              <div className="text-3xl font-bold mb-1 text-indigo-400">
+                {walletBalance ? Number(formatEther(walletBalance.value)).toFixed(4) : "0.0000"}
+              </div>
+              <div className="text-sm text-indigo-200/70 font-medium">Wallet Balance (TTRUST)</div>
+            </div>
+          </div>
+          
+          {/* Controls integrated in dashboard */}
+          <div className="mt-6 pt-6 border-t border-purple-500/20">
+            <div className="flex items-center gap-6">
+              {/* Compact Slider */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-2 text-purple-200">
+                  {count} dice {count === 1 ? 'roll' : 'rolls'}
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={50}
+                  value={count}
+                  onChange={(e) => setCount(Number(e.target.value))}
+                  className="w-full h-2 bg-gradient-to-r from-purple-800/50 to-pink-800/50 rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${(count * 2)}%, #374151 ${(count * 2)}%, #374151 100%)`
+                  }}
+                />
+                <div className="flex justify-between text-xs text-purple-300/50 mt-1">
+                  <span>1</span>
+                  <span>50</span>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  disabled={running}
+                  onClick={runAll}
+                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed font-bold text-white shadow-lg transform transition-all duration-200 hover:scale-105 disabled:hover:scale-100"
+                >
+                  🚀 Launch
+                </button>
+                <button
+                  onClick={() => setAuto(v => !v)}
+                  className={`px-4 py-2 rounded-xl border font-medium transition-all duration-200 hover:scale-105 ${
+                    auto 
+                      ? "bg-gradient-to-r from-indigo-500 to-purple-500 border-indigo-400" 
+                      : "bg-gradient-to-r from-slate-600/30 to-slate-700/30 border-slate-500/50 hover:from-slate-500/30 hover:to-slate-600/30"
+                  }`}
+                >
+                  ⚡ Auto {auto && (nextRunIn != null ? `(${nextRunIn}s)` : "")}
+                </button>
+              </div>
+            </div>
+            
+            {/* Status and Info */}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-purple-100/90 font-medium">
+                {running ? (
+                  <span className="text-cyan-400">🎲 Rolling dice… {minedCount}/{count} completed</span>
+                ) : auto ? (
+                  <span className="text-indigo-400 animate-pulse">⚡ Auto mode: next batch in {nextRunIn ?? 2}s</span>
+                ) : winStreak >= 5 ? (
+                  <span className="text-yellow-300 animate-pulse">🚀 UNSTOPPABLE! You're on fire!</span>
+                ) : winStreak >= 3 ? (
+                  <span className="text-emerald-400">🔥 HOT STREAK! Keep it going!</span>
+                ) : totalPlays > 0 && animatedBalance > 0n ? (
+                  <span className="text-emerald-400">💰 Winning! Roll again for bigger gains!</span>
+                ) : totalPlays > 0 && animatedBalance < 0n ? (
+                  <span className="text-amber-400">💪 Your big win is coming - keep rolling!</span>
+                ) : (
+                  <span>✨ Ready to win big with {count} dice</span>
+                )}
+              </div>
+              
+              <div className="text-xs text-purple-200/60 flex items-center gap-4">
+                <span>💰 Cost: {ROLL_ETH_VALUE} TTRUST per roll</span>
+                <span>🏆 Prize: {prize ? formatEther(prize) : "0"} TTRUST</span>
+              </div>
             </div>
           </div>
         </section>
 
+        {/* Win Streak Display - Fixed height to prevent flickering */}
+        <section className={`text-center p-4 rounded-2xl transition-all duration-500 min-h-[80px] flex flex-col justify-center ${
+          winStreak > 0 
+            ? (winStreak >= 3 
+              ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 border border-yellow-400/70 animate-pulse opacity-100' 
+              : 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 opacity-100'
+            )
+            : 'bg-transparent border border-transparent opacity-0'
+        }`}>
+          {winStreak > 0 && (
+            <>
+              <div className="text-2xl font-bold">
+                <span className={winStreak >= 3 ? "text-yellow-300" : "text-emerald-400"}>
+                  {winStreak >= 3 ? '🔥' : '🎯'} {winStreak} {winStreak >= 3 ? 'WIN STREAK!' : 'wins in a row'}
+                </span>
+              </div>
+              {winStreak >= 5 && (
+                <div className="text-lg text-yellow-200 animate-bounce mt-1">
+                  🚀 UNSTOPPABLE! ON FIRE! 🚀
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        
+
         {/* Grid */}
-        <section className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium">Real-time Dice</h2>
-            <div className="text-sm text-neutral-400">{minedCount}/{tiles.length} mined</div>
+        <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              🎲 Live Dice Rolls
+            </h2>
+            <div className="text-lg text-purple-200/80 font-medium">
+              {minedCount}/{count} completed
+            </div>
           </div>
 
           <div
-            className="grid"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "10px" }}
+            className="grid gap-2"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(85px, 1fr))" }}
           >
-            {tiles.map((t) => (
+            {tiles.slice(0, count).map((t) => (
               <TileCard key={t.id} tile={t} />
             ))}
           </div>
         </section>
 
-        <footer className="text-xs text-neutral-500 pb-8">
-          Winning numbers are 0,1,2,3,4,5 (hex). Cost: 0.002 ETH per roll. 
-          Sequential mode: 100ms between transactions. Batch mode: 50ms between submissions, groups of {burstSize}. 
-          In Auto mode, a new batch starts 5s after completion.
+        <footer className="text-center text-sm text-purple-300/50 pb-8 pt-4">
+          <div className="max-w-2xl mx-auto space-y-2">
+            <p>🎯 Winning numbers: 0-5 (hex) • 💰 Cost: 0.002 TTRUST per roll</p>
+            <p>⚡ Batch mode with 50ms intervals • 🔄 Auto mode restarts every 2s</p>
+            <p className="text-xs text-purple-400/40">Powered by Intuition Protocol • Provably Fair On-Chain</p>
+          </div>
         </footer>
+      </div>
+    </div>
+  );
+}
+
+function FlyingCoin({ coin }: { coin: {id: string, fromTile: number, amount: bigint, isWin: boolean} }) {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return (
+    <div
+      className={`fixed pointer-events-none z-50 transition-all duration-1500 ease-out ${
+        coin.isWin ? 'text-emerald-400' : 'text-rose-400'
+      }`}
+      style={{
+        left: `${20 + (coin.fromTile % 10) * 8}%`,
+        top: '60%',
+        transform: mounted ? 'translate(-50%, -800px) scale(0.5)' : 'translate(-50%, 0) scale(1)',
+        opacity: mounted ? 0 : 1,
+      }}
+    >
+      <div className={`text-4xl ${coin.isWin ? 'animate-spin' : 'animate-pulse'}`}>
+        {coin.isWin ? '🪙' : '💸'}
+      </div>
+      <div className="text-xs font-bold text-center mt-1">
+        {coin.isWin ? '+' : '-'}{formatEther(coin.amount)}
       </div>
     </div>
   );
@@ -710,38 +954,43 @@ function TileCard({ tile }: { tile: Tile }) {
   return (
     <div
       className={
-        "rounded-xl border bg-neutral-950 p-3 space-y-2 transition-colors " +
-        (phase === "mined" ? (win ? "border-emerald-600" : "border-rose-600") : "border-neutral-800")
+        "rounded-xl border p-2 transition-all duration-300 backdrop-blur-sm h-20 flex flex-col " +
+        (phase === "mined" 
+          ? (win 
+            ? "bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border-emerald-400/50 shadow-lg shadow-emerald-500/20" 
+            : "bg-gradient-to-br from-rose-500/20 to-red-500/20 border-rose-400/50 shadow-lg shadow-rose-500/20"
+          ) 
+          : "bg-black/30 border-purple-500/30 hover:border-purple-400/50 hover:bg-black/40"
+        )
       }
     >
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-neutral-400">#{tile.id}</div>
+      <div className="flex items-center justify-end mb-1">
         <span
           className={
-            "text-[10px] px-2 py-0.5 rounded-full " +
+            "text-[9px] px-2 py-0.5 rounded-full font-semibold " +
             (phase === "idle"
-              ? "bg-neutral-800"
+              ? "bg-slate-700/50 text-slate-300"
               : phase === "queued"
-              ? "bg-neutral-700"
+              ? "bg-slate-600/50 text-slate-200"
               : phase === "preparing"
-              ? "bg-yellow-700"
+              ? "bg-yellow-500/30 text-yellow-200"
               : phase === "getting-gas"
-              ? "bg-yellow-600"
+              ? "bg-yellow-400/30 text-yellow-100"
               : phase === "estimating-gas"
-              ? "bg-yellow-500"
+              ? "bg-yellow-300/30 text-yellow-100"
               : phase === "building-tx"
-              ? "bg-orange-600"
+              ? "bg-orange-500/30 text-orange-200"
               : phase === "waiting-approval"
-              ? "bg-amber-600 animate-pulse"
+              ? "bg-amber-500/30 text-amber-200 animate-pulse"
               : phase === "submitting"
-              ? "bg-blue-700 animate-pulse"
+              ? "bg-blue-500/30 text-blue-200 animate-pulse"
               : phase === "sent"
-              ? "bg-blue-600 animate-pulse"
+              ? "bg-cyan-500/30 text-cyan-200 animate-pulse"
               : phase === "mined"
               ? win
-                ? "bg-emerald-700"
-                : "bg-rose-700"
-              : "bg-rose-700")
+                ? "bg-emerald-500/30 text-emerald-200"
+                : "bg-rose-500/30 text-rose-200"
+              : "bg-rose-500/30 text-rose-200")
           }
         >
           {phase === "getting-gas" ? "gas" 
@@ -749,48 +998,43 @@ function TileCard({ tile }: { tile: Tile }) {
            : phase === "building-tx" ? "building"
            : phase === "waiting-approval" ? "approval"
            : phase === "submitting" ? "submit"
+           : phase === "mined" && "txHash" in st && st.txHash && st.txHash !== "unknown" ? (
+             <a
+               href={`https://testnet.explorer.intuition.systems/tx/${st.txHash}`}
+               target="_blank"
+               rel="noopener noreferrer"
+               className="flex items-center gap-1 hover:underline"
+               title={`View transaction ${st.txHash} in block explorer`}
+             >
+               {"latencyMs" in st ? `${formatMs(st.latencyMs)} 🔍` : "mined 🔍"}
+             </a>
+           )
+           : phase === "mined" && "latencyMs" in st ? `${formatMs(st.latencyMs)}`
            : phase}
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-lg bg-neutral-800 grid place-items-center text-2xl font-semibold ${
-          phase === "sent" ? 'animate-pulse bg-blue-800' : 
-          isWaitingForRealResult ? 'animate-pulse bg-yellow-800' : ''
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className={`w-10 h-10 rounded-lg grid place-items-center text-xl font-bold transition-all duration-300 ${
+          phase === "sent" ? 'animate-pulse bg-gradient-to-br from-cyan-500/30 to-blue-500/30 border border-cyan-400/50' : 
+          isWaitingForRealResult ? 'animate-pulse bg-gradient-to-br from-yellow-500/30 to-amber-500/30 border border-yellow-400/50' :
+          phase === "mined" && win ? 'bg-gradient-to-br from-emerald-500/30 to-teal-500/30 border border-emerald-400/50' :
+          phase === "mined" && !win ? 'bg-gradient-to-br from-rose-500/30 to-red-500/30 border border-rose-400/50' :
+          'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400/30'
         }`}>
-          {isWaitingForRealResult ? '✓' : rolled}
+          {isWaitingForRealResult ? '✨' : rolled}
         </div>
-        <div className="text-xs space-y-1 min-w-0">
-          {phase === "mined" && (
-            <div className={isWaitingForRealResult ? "text-yellow-400" : win ? "text-emerald-400" : "text-rose-300"}>
-              {isWaitingForRealResult ? "Confirmed - Waiting for result..." : win ? "Won" : "Lost"}
-            </div>
-          )}
-          {("latencyMs" in st) && (
-            <div className="text-neutral-400">Latency: {formatMs(st.latencyMs)}</div>
-          )}
+        
+        {/* Fixed height space for error info only */}
+        <div className="h-4 flex items-center justify-center mt-1">
           {phase === "failed" && "error" in st && (
-            <div className="text-rose-300 line-clamp-2" title={st.error}>
-              {st.error}
+            <div className="text-rose-300 text-[10px]" title={st.error}>
+              ❌ Error
             </div>
           )}
         </div>
       </div>
-      
-      {/* Explorer button for transactions with txHash (shows as soon as transaction is sent) */}
-      {"txHash" in st && st.txHash && st.txHash !== "unknown" && (phase === "sent" || phase === "mined" || phase === "failed") && (
-        <div className="pt-2 border-t border-neutral-800">
-          <a
-            href={`https://testnet.explorer.intuition.systems/tx/${st.txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded text-blue-300 transition-colors w-full justify-center"
-            title={`View transaction ${st.txHash} in block explorer`}
-          >
-            🔍 Explorer
-          </a>
-        </div>
-      )}
+
     </div>
   );
 }
