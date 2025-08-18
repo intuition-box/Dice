@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { hardhat } from "viem/chains";
 import { Bars3Icon, BugAntIcon } from "@heroicons/react/24/outline";
-import { CubeIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
+import { CubeIcon, Squares2X2Icon,ArrowDownTrayIcon, ArrowPathIcon, ArrowUpTrayIcon, PhotoIcon } from "@heroicons/react/24/outline";
 import { FaucetButton, RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { useOutsideClick, useTargetNetwork } from "~~/hooks/scaffold-eth";
 
@@ -72,14 +72,14 @@ export const Header = () => {
   });
 
   return (
-    <div className="sticky lg:static top-0 navbar bg-black/90 backdrop-blur-md border-b border-purple-500/20 min-h-0 shrink-0 justify-between z-20 shadow-lg shadow-purple-500/10 px-0 sm:px-2">
+    <div className="sticky lg:static top-0 navbar bg-black min-h-0 shrink-0 justify-between z-20 shadow-md shadow-black px-0 sm:px-2">
       <div className="navbar-start w-auto lg:w-1/2">
         <details className="dropdown" ref={burgerMenuRef}>
-          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-purple-500/20 text-white">
+          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent">
             <Bars3Icon className="h-1/2" />
           </summary>
           <ul
-            className="menu menu-compact dropdown-content mt-3 p-2 shadow-lg bg-black/95 backdrop-blur-md border border-purple-500/30 rounded-box w-52"
+            className="menu menu-compact dropdown-content mt-3 p-2 shadow-sm bg-base-100 rounded-box w-52"
             onClick={() => {
               burgerMenuRef?.current?.removeAttribute("open");
             }}
