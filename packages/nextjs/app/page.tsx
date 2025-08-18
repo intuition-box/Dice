@@ -779,7 +779,7 @@ export default function App() {
         </div>
       </div>
       
-      <div className="relative max-w-6xl mx-auto p-4 space-y-4">
+      <div className="relative max-w-6xl mx-auto p-3 md:p-4 space-y-4">
         {/* Flying Coins Animation */}
         {flyingCoins.map((coin) => (
           <FlyingCoin key={coin.id} coin={coin} />
@@ -816,10 +816,10 @@ export default function App() {
         </div>
 
         {/* Dashboard */}
-        <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 shadow-2xl">          
-          <div className="grid grid-cols-4 gap-4 h-32">
+        <section className="bg-black/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-4 md:p-6 shadow-2xl">          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 h-auto md:h-32">
             {/* Balance - Super Addictive Version */}
-            <div className={`text-center rounded-2xl p-4 border transition-all duration-300 relative overflow-hidden h-full flex flex-col justify-center ${
+            <div className={`text-center rounded-2xl p-3 md:p-4 border transition-all duration-300 relative overflow-hidden h-full flex flex-col justify-center ${
               balanceAnimation === 'gaining' 
                 ? 'bg-gradient-to-br from-emerald-500/30 to-teal-500/30 border-emerald-400/70 shadow-lg shadow-emerald-500/40 scale-105' 
                 : balanceAnimation === 'losing'
@@ -836,7 +836,7 @@ export default function App() {
                 </div>
               )}
               
-              <div className={`text-3xl font-bold mb-1 transition-all duration-300 ${
+              <div className={`text-xl md:text-3xl font-bold mb-1 transition-all duration-300 ${
                 balanceAnimation === 'gaining' ? 'animate-bounce' : ''
               }`}>
                 <span className={animatedBalance >= 0n ? "text-emerald-400" : "text-rose-400"}>
@@ -856,7 +856,7 @@ export default function App() {
                 )}
               </div>
               
-              <div className="text-sm text-purple-200/70 font-medium">PNL (TTRUST)</div>
+              <div className="text-xs md:text-sm text-purple-200/70 font-medium">PNL (TTRUST)</div>
               
               {/* Multiplier hint for wins - Fixed height */}
               <div className="h-6 flex items-center justify-center">
@@ -869,35 +869,35 @@ export default function App() {
             </div>
             
             {/* Total Plays */}
-            <div className="text-center bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-2xl p-4 border border-blue-500/20">
-              <div className="text-3xl font-bold mb-1 text-cyan-400">
+            <div className="text-center bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-2xl p-3 md:p-4 border border-blue-500/20">
+              <div className="text-xl md:text-3xl font-bold mb-1 text-cyan-400">
                 {totalPlays.toLocaleString()}
               </div>
-              <div className="text-sm text-blue-200/70 font-medium">Total Plays</div>
+              <div className="text-xs md:text-sm text-blue-200/70 font-medium">Total Plays</div>
             </div>
             
             {/* Total Bets */}
-            <div className="text-center bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-2xl p-4 border border-amber-500/20">
-              <div className="text-3xl font-bold mb-1 text-amber-400">
+            <div className="text-center bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-2xl p-3 md:p-4 border border-amber-500/20">
+              <div className="text-xl md:text-3xl font-bold mb-1 text-amber-400">
                 {formatEther(totalBets)}
               </div>
-              <div className="text-sm text-amber-200/70 font-medium">Total Bets (TTRUST)</div>
+              <div className="text-xs md:text-sm text-amber-200/70 font-medium">Total Bets (TTRUST)</div>
             </div>
             
             {/* Wallet Balance */}
-            <div className="text-center bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl p-4 border border-indigo-500/20">
-              <div className="text-3xl font-bold mb-1 text-indigo-400">
+            <div className="text-center bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl p-3 md:p-4 border border-indigo-500/20">
+              <div className="text-xl md:text-3xl font-bold mb-1 text-indigo-400">
                 {animatedWalletBalance.toFixed(4)}
               </div>
-              <div className="text-sm text-indigo-200/70 font-medium">Wallet Balance (TTRUST)</div>
+              <div className="text-xs md:text-sm text-indigo-200/70 font-medium">Wallet Balance (TTRUST)</div>
             </div>
           </div>
 
           {/* Controls integrated in dashboard */}
           <div className="mt-6 pt-6 border-t border-purple-500/20">
-            <div className="flex items-center gap-6">
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
               {/* Compact Slider */}
-              <div className="flex-1">
+              <div className="w-full sm:flex-1">
                 <label className="block text-sm font-medium mb-2 text-purple-200">
                   {count} dice {count === 1 ? 'roll' : 'rolls'}
                 </label>
@@ -919,17 +919,17 @@ export default function App() {
               </div>
               
               {/* Action Buttons */}
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
               disabled={running}
               onClick={runAll}
-                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed font-bold text-white shadow-lg transform transition-all duration-200 hover:scale-105 disabled:hover:scale-100"
+                  className="w-full sm:w-auto px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed font-bold text-white shadow-lg transform transition-all duration-200 hover:scale-105 disabled:hover:scale-100"
                 >
                   🚀 Launch
             </button>
             <button
               onClick={() => setAuto(v => !v)}
-                  className={`px-4 py-2 rounded-xl border font-medium transition-all duration-200 hover:scale-105 ${
+                  className={`w-full sm:w-auto px-4 py-2 rounded-xl border font-medium transition-all duration-200 hover:scale-105 ${
                     auto 
                       ? "bg-gradient-to-r from-indigo-500 to-purple-500 border-indigo-400" 
                       : "bg-gradient-to-r from-slate-600/30 to-slate-700/30 border-slate-500/50 hover:from-slate-500/30 hover:to-slate-600/30"

@@ -64,7 +64,7 @@ const ContractInfo: NextPage = () => {
       const diff = targetBalance - startBalance;
       
       if (Math.abs(diff) > 0.001) { // Only animate if difference is significant
-        const steps = 10;
+        const steps = 5; // Faster animation
         const stepSize = diff / steps;
         let currentStep = 0;
         
@@ -76,7 +76,7 @@ const ContractInfo: NextPage = () => {
           } else {
             setAnimatedBalance(startBalance + stepSize * currentStep);
           }
-        }, 50);
+        }, 20); // Much faster intervals
         
         return () => clearInterval(interval);
       } else {
@@ -89,7 +89,7 @@ const ContractInfo: NextPage = () => {
   useEffect(() => {
     if (actualTxCount !== animatedTxCount) {
       const diff = actualTxCount - animatedTxCount;
-      const steps = Math.min(10, Math.abs(diff));
+      const steps = Math.min(5, Math.abs(diff)); // Faster steps
       const stepSize = diff / steps;
       let currentStep = 0;
       
@@ -101,7 +101,7 @@ const ContractInfo: NextPage = () => {
         } else {
           setAnimatedTxCount(Math.round(animatedTxCount + stepSize * currentStep));
         }
-      }, 100);
+      }, 25); // Much faster intervals
       
       return () => clearInterval(interval);
     }
